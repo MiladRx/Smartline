@@ -240,14 +240,24 @@ function loadPrefs(){
 async function sendCmd(opcode, params){
   if(!ready) throw new Error("not connected");
   if(mode === "bridge"){
-    const r = await fetch(BRIDGE_URL + "/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ opcode, params: Array.from(params), dest: DEST })
-    });
-    const j = await r.json();
-    if(!j.ok) throw new Error(j.error || "command failed");
-    return;
+    let lastErr = null;
+    for(let attempt = 0; attempt < 2; attempt++){
+      try{
+        const r = await fetch(bridgeBase + "/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ opcode, params: Array.from(params), dest: DEST })
+        });
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error || "command failed");
+        if($("statusText").textContent === "Command failed") setStatus("Connected", "ok");
+        return;
+      }catch(e){
+        lastErr = e;
+        await sleep(250);
+      }
+    }
+    throw lastErr || new Error("command failed");
   }
   const packet = await buildCommandPacket(sessionKey, macBytes, seq, DEST, opcode, params, VENDOR);
   seq = (seq + 1) & 0xFFFFFF;
@@ -297,7 +307,7 @@ function savedBridge(){
 async function detectBridge(base){
   try{
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2000);
+    const t = setTimeout(() => ctrl.abort(), 4000);
     const r = await fetch(base + "/ping", { cache:"no-store", signal: ctrl.signal });
     clearTimeout(t);
     const j = await r.json();
