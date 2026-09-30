@@ -1,2 +1,1 @@
-# Put your Railway domain here (no path), e.g.:
-# wss://smartline-production-xxxx.up.railway.app
+wss://smartline-production-9819.up.railway.app
