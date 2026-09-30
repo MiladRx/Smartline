@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<title>Smartline Bulb</title>
+<style>
+  :root{
+    --bg:#0b0d12; --card:#151a24; --card2:#10141d; --line:#242c3b;
+    --tx:#eef2f8; --muted:#8b95a7; --accent:#8ec7ff; --amber:#ffb96b;
+    --ok:#5fe3a6; --warn:#ffc857; --err:#ff7b7b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;min-height:100dvh;color:var(--tx);
+    background:radial-gradient(120% 90% at 50% -20%,#1b2233 0%,#0b0d12 60%);
+    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:24px 18px calc(24px + env(safe-area-inset-bottom));
+  }
+  .app{width:100%;max-width:430px}
+  header{display:flex;align-items:center;justify-content:space-between;margin:0 6px 18px}
+  h1{font-size:17px;font-weight:650;letter-spacing:.2px;margin:0}
+  h1 span{color:var(--muted);font-weight:450}
+  .status{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:#0e121a}
+  .status i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:block}
+  .status.ok i{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .status.warn i{background:var(--warn)}
+  .status.err i{background:var(--err)}
+  .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
+    border-radius:26px;padding:26px 22px 24px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+  .orb-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;margin:6px 0 26px}
+  .orb{width:150px;height:150px;border-radius:50%;cursor:pointer;border:1px solid var(--line);
+    background:radial-gradient(80% 80% at 50% 20%,#1d2433,#12161f);
+    color:var(--muted);display:grid;place-items:center;transition:all .25s ease;outline:none}
+  .orb svg{width:52px;height:52px;transition:all .25s ease}
+  .orb:disabled{opacity:.45;cursor:default}
+  .orb.on{color:#3a2a10;border-color:transparent;
+    background:radial-gradient(80% 80% at 50% 25%,#ffe9c9,var(--amber));
+    box-shadow:0 0 0 10px rgba(255,185,107,.08),0 0 60px rgba(255,185,107,.45)}
+  .orb.on svg{transform:scale(1.05)}
+  .state{font-size:14px;color:var(--muted);letter-spacing:.2px}
+  .row{display:flex;align-items:center;gap:14px;margin-top:18px}
+  .row:first-of-type{margin-top:0}
+  .row label{width:86px;flex:none;font-size:12.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+  .val{width:46px;flex:none;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;color:var(--tx)}
+  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:36px;background:transparent;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:#252d3d}
+  input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:#252d3d}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;
+    background:#f2f5fa;border:none;margin-top:-9px;box-shadow:0 2px 10px rgba(0,0,0,.55);transition:transform .1s}
+  input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#f2f5fa;border:none;
+    box-shadow:0 2px 10px rgba(0,0,0,.55)}
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(1.12)}
+  input[type=range]:disabled{opacity:.4}
+  #brightness::-webkit-slider-thumb{background:#eaf3ff}
+  #tone::-webkit-slider-thumb{background:linear-gradient(135deg,#ffd9a8,#fff6ea,#cfe6ff)}
+  #tone::-moz-range-thumb{background:#ffd9a8}
+  .hint{margin:16px 4px 0;font-size:13px;color:var(--muted);text-align:center;min-height:20px}
+  .btn{margin-top:16px;width:100%;padding:15px;border-radius:16px;border:1px solid var(--line);
+    background:#1a2130;color:var(--tx);font:inherit;font-weight:600;cursor:pointer;transition:border-color .15s}
+  .btn:hover{border-color:var(--accent)}
+  .btn[hidden]{display:none}
+  footer{margin:16px 6px 0;font-size:11.5px;color:#5b6678;text-align:center}
+  @media (max-width:380px){
+    .orb{width:126px;height:126px}
+    .orb svg{width:44px;height:44px}
+    .row label{width:70px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Smartline <span>· bulb</span></h1>
+    <div class="status" id="status"><i></i><span id="statusText">starting…</span></div>
+  </header>
+
+  <main class="card">
+    <div class="orb-wrap">
+      <button class="orb" id="power" disabled aria-label="Power">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M12 3v8"/>
+          <path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/>
+        </svg>
+      </button>
+      <div class="state" id="stateText">—</div>
+    </div>
+
+    <div class="row">
+      <label for="brightness">Brightness</label>
+      <input type="range" id="brightness" min="1" max="100" value="100" disabled>
+      <div class="val" id="brightVal">100%</div>
+    </div>
+    <div class="row">
+      <label for="tone">Tone</label>
+      <input type="range" id="tone" min="0" max="100" value="50" disabled>
+      <div class="val" id="toneVal">50</div>
+    </div>
+
+    <button class="btn" id="connectBtn" hidden>Connect</button>
+  </main>
+
+  <footer>Local Bluetooth · no cloud</footer>
+</div>
+
+<script>
+"use strict";
+
+const UUID = {
+  service: "00010203-0405-0607-0809-0a0b0c0d1910",
+  status:  "00010203-0405-0607-0809-0a0b0c0d1911",
+  command: "00010203-0405-0607-0809-0a0b0c0d1912",
+  pair:    "00010203-0405-0607-0809-0a0b0c0d1914",
+  fe07:    "0000fe07-0000-1000-8000-00805f9b34fb"
+};
+const OP = { POWER:0xD0, BRIGHT:0xD2, TONE:0xE2 };
+const BRIDGE_URL = "http://" + location.hostname + ":8138";
+const MAC = "A4:C1:38:36:D0:B2";
+const NAME = "BLE MESH";
+const PASS = "123";
+const VENDOR = [0x11, 0x02];
+const DEST = 0x00B2;
+const PREFS_KEY = "smartline-prefs";
+
+let mode = null;
+let ready = false;
+let device = null;
+let chars = {};
+let sessionKey = null;
+let macBytes = null;
+let seq = 0;
+let state = { on:false, brightness:100, tone:50 };
+let bridgeTimer = null;
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const enc = s => new TextEncoder().encode(s);
+const hex = u8 => Array.from(u8, b => b.toString(16).padStart(2,"0")).join("");
+const concat = (...arrs) => { const n = arrs.reduce((s,a)=>s+a.length,0); const o = new Uint8Array(n); let p=0; for(const a of arrs){o.set(a,p);p+=a.length;} return o; };
+const reverseBytes = u8 => Uint8Array.from(u8).reverse();
+const pad16 = u8 => { const o = new Uint8Array(16); o.set(u8.slice(0,16)); return o; };
+const xorBytes = (a,b) => { const o = new Uint8Array(a.length); for(let i=0;i<a.length;i++) o[i]=a[i]^b[i]; return o; };
+const u24le = n => Uint8Array.of(n & 0xff, (n>>8) & 0xff, (n>>16) & 0xff);
+
+async function aesBlock(key16, block16){
+  const ck = await crypto.subtle.importKey("raw", reverseBytes(key16), { name:"AES-CBC" }, false, ["encrypt"]);
+  const out = new Uint8Array(await crypto.subtle.encrypt({ name:"AES-CBC", iv:new Uint8Array(16) }, ck, reverseBytes(block16)));
+  return reverseBytes(out.slice(0,16));
+}
+const xorNamePass = (name, pass) => xorBytes(pad16(enc(name)), pad16(enc(pass)));
+async function buildPairPacket(name, pass, clientRandom){
+  const proof = await aesBlock(pad16(clientRandom), xorNamePass(name, pass));
+  return concat(Uint8Array.of(0x0C), clientRandom, proof.slice(0,8));
+}
+const deriveSessionKey = (name, pass, cr, dr) => aesBlock(xorNamePass(name, pass), concat(cr, dr));
+async function makeChecksum(key, nonce8, payload){
+  let check = await aesBlock(key, pad16(concat(nonce8, Uint8Array.of(payload.length & 0xff))));
+  for(let i=0;i<payload.length;i+=16) check = await aesBlock(key, xorBytes(check, pad16(payload.slice(i,i+16))));
+  return check;
+}
+async function cryptPayload(key, nonce8, payload){
+  const base = pad16(concat(Uint8Array.of(0), nonce8));
+  const out = new Uint8Array(payload.length);
+  for(let i=0;i<payload.length;i+=16){
+    const ks = await aesBlock(key, base);
+    const chunk = payload.slice(i, i+16);
+    for(let j=0;j<chunk.length;j++) out[i+j] = chunk[j] ^ ks[j];
+    base[0] = (base[0] + 1) & 0xff;
+  }
+  return out;
+}
+async function buildCommandPacket(key, mac, sequence, dest, opcode, params, vendor){
+  const seqB = u24le(sequence);
+  const nonce = concat(reverseBytes(mac).slice(0,4), Uint8Array.of(0x01), seqB);
+  const plain = new Uint8Array(15);
+  plain[0] = dest & 0xff; plain[1] = (dest >> 8) & 0xff; plain[2] = opcode;
+  plain[3] = vendor[0]; plain[4] = vendor[1];
+  plain.set(params.slice(0,10), 5);
+  const tag = (await makeChecksum(key, nonce, plain)).slice(0,2);
+  return concat(seqB, tag, await cryptPayload(key, nonce, plain));
+}
+
+function setStatus(text, kind){
+  $("statusText").textContent = text;
+  $("status").className = "status" + (kind ? " " + kind : "");
+}
+function render(){
+  const orb = $("power");
+  orb.classList.toggle("on", state.on === true);
+  orb.disabled = !ready;
+  $("stateText").textContent = ready
+    ? (state.on ? "On · " + state.brightness + "%" : "Off")
+    : "Not connected";
+  if(document.activeElement !== $("brightness")){
+    $("brightness").value = state.brightness;
+    $("brightVal").textContent = state.brightness + "%";
+  }
+  if(document.activeElement !== $("tone")){
+    $("tone").value = state.tone;
+    $("toneVal").textContent = state.tone;
+  }
+  $("brightness").disabled = !ready;
+  $("tone").disabled = !ready;
+}
+function savePrefs(){
+  try{ localStorage.setItem(PREFS_KEY, JSON.stringify({ brightness: state.brightness, tone: state.tone, on: state.on })); }catch(e){}
+}
+function loadPrefs(){
+  try{
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+    if(typeof p.brightness === "number") state.brightness = clamp(p.brightness, 1, 100);
+    if(typeof p.tone === "number") state.tone = clamp(p.tone, 0, 100);
+    if(typeof p.on === "boolean") state.on = p.on;
+  }catch(e){}
+}
+
+async function sendCmd(opcode, params){
+  if(!ready) throw new Error("not connected");
+  if(mode === "bridge"){
+    const r = await fetch(BRIDGE_URL + "/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opcode, params: Array.from(params), dest: DEST })
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "command failed");
+    return;
+  }
+  const packet = await buildCommandPacket(sessionKey, macBytes, seq, DEST, opcode, params, VENDOR);
+  seq = (seq + 1) & 0xFFFFFF;
+  await chars.command.writeValueWithoutResponse(packet);
+}
+
+function makeThrottle(send){
+  let timer = null, pending = null, inFlight = false, last = 0;
+  async function flush(){
+    if(inFlight || pending === null) return;
+    const val = pending; pending = null;
+    inFlight = true; last = Date.now();
+    try{ await send(val); }catch(e){ setStatus("Command failed", "err"); }
+    inFlight = false;
+    if(pending !== null) queue(pending);
+  }
+  function queue(v){
+    pending = v;
+    clearTimeout(timer);
+    timer = setTimeout(flush, Math.max(0, 150 - (Date.now() - last)));
+  }
+  return { queue, flush };
+}
+const brightThrottle = makeThrottle(async v => {
+  state.brightness = clamp(Math.round(v), 1, 100);
+  render(); savePrefs();
+  await sendCmd(OP.BRIGHT, Uint8Array.of(state.brightness));
+});
+const toneThrottle = makeThrottle(async v => {
+  state.tone = clamp(Math.round(v), 0, 100);
+  render(); savePrefs();
+  await sendCmd(OP.TONE, Uint8Array.of(5, state.tone));
+});
+
+async function togglePower(){
+  if(!ready) return;
+  const on = !state.on;
+  state.on = on;
+  render(); savePrefs();
+  try{ await sendCmd(OP.POWER, Uint8Array.of(on ? 1 : 0)); }
+  catch(e){ state.on = !on; render(); setStatus("Command failed", "err"); }
+}
+
+async function detectBridge(){
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1500);
+    const r = await fetch(BRIDGE_URL + "/ping", { cache:"no-store", signal: ctrl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    return j && j.ok ? j : null;
+  }catch(e){ return null; }
+}
+async function bridgeConnect(){
+  const r = await fetch(BRIDGE_URL + "/connect", { method:"POST", headers:{ "Content-Type":"application/json" }, body:"{}" });
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error || "connect failed");
+  mode = "bridge";
+  ready = true;
+  render();
+  clearInterval(bridgeTimer);
+  bridgeTimer = setInterval(async () => {
+    try{
+      const rr = await fetch(BRIDGE_URL + "/state", { cache:"no-store" });
+      const js = await rr.json();
+      if(typeof js.on === "boolean" && js.on !== state.on){ state.on = js.on; render(); }
+      if(typeof js.brightness === "number" && js.brightness !== state.brightness && document.activeElement !== $("brightness")){
+        state.brightness = js.brightness; render();
+      }
+      if(typeof js.tone === "number" && js.tone !== state.tone && document.activeElement !== $("tone")){
+        state.tone = js.tone; render();
+      }
+    }catch(e){}
+  }, 2000);
+}
+
+async function connectBT(){
+  device = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:[UUID.service, UUID.fe07] });
+  const server = await device.gatt.connect();
+  device.addEventListener("gattserverdisconnected", () => { ready = false; render(); setStatus("Disconnected", "err"); });
+  const svc = await server.getPrimaryService(UUID.service);
+  chars.status = await svc.getCharacteristic(UUID.status);
+  chars.command = await svc.getCharacteristic(UUID.command);
+  chars.pair = await svc.getCharacteristic(UUID.pair);
+  macBytes = Uint8Array.from(MAC.split(":").map(x => parseInt(x,16)));
+  const clientRandom = crypto.getRandomValues(new Uint8Array(8));
+  await chars.pair.writeValue(await buildPairPacket(NAME, PASS, clientRandom));
+  await sleep(80);
+  try{ await chars.status.writeValue(Uint8Array.of(1)); }catch(e){}
+  let resp = null;
+  for(let i=0;i<40 && !resp;i++){
+    await sleep(150);
+    try{ const v = new Uint8Array(await chars.pair.readValue()); if(v.length) resp = v; }catch(e){}
+  }
+  if(!resp || resp[0] !== 0x0D) throw new Error("pair failed");
+  sessionKey = await deriveSessionKey(NAME, PASS, clientRandom, resp.slice(1,9));
+  seq = 0;
+  mode = "bt";
+  ready = true;
+  try{ await chars.status.startNotifications(); }catch(e){}
+  render();
+}
+
+async function connect(){
+  const btn = $("connectBtn");
+  btn.hidden = true;
+  setStatus("Connecting…", "warn");
+  try{
+    const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+    const b = isLocal ? await detectBridge() : null;
+    if(b){
+      await bridgeConnect();
+    } else if("bluetooth" in navigator){
+      await connectBT();
+    } else {
+      throw new Error("start start-bridge.bat first");
+    }
+    setStatus("Connected", "ok");
+    render();
+    try{
+      await sendCmd(OP.BRIGHT, Uint8Array.of(state.brightness));
+      await sendCmd(OP.TONE, Uint8Array.of(5, state.tone));
+    }catch(e){}
+  }catch(e){
+    ready = false;
+    render();
+    setStatus(e.message === "pair failed" ? "Pair failed" : "Not reachable", "err");
+    btn.hidden = false;
+    btn.textContent = "Reconnect";
+  }
+}
+
+function init(){
+  loadPrefs();
+  render();
+  $("power").addEventListener("click", togglePower);
+  $("brightness").addEventListener("input", e => {
+    $("brightVal").textContent = e.target.value + "%";
+    brightThrottle.queue(Number(e.target.value));
+  });
+  $("brightness").addEventListener("change", e => { brightThrottle.flush(); });
+  $("tone").addEventListener("input", e => {
+    $("toneVal").textContent = e.target.value;
+    toneThrottle.queue(Number(e.target.value));
+  });
+  $("tone").addEventListener("change", e => { toneThrottle.flush(); });
+  $("connectBtn").addEventListener("click", connect);
+  connect();
+}
+
+if(typeof window !== "undefined") window.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
