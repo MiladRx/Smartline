@@ -234,7 +234,7 @@ async def amain():
     print(" Smartline bulb bridge is running")
     print(f" http://127.0.0.1:{PORT}")
     print(" Keep this window open. Now use the web app:")
-    print(" http://localhost:8137/smartline-web.html")
+    print(" http://localhost:8137/")
     print("=" * 56)
     while True:
         await asyncio.sleep(3600)
