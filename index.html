@@ -355,9 +355,15 @@ async function connect(){
   }catch(e){
     ready = false;
     render();
-    setStatus(e.message === "pair failed" ? "Pair failed" : "Not reachable", "err");
+    const msg = (e && e.message) || "";
+    const hasBT = ("bluetooth" in navigator);
+    let text = "Not reachable";
+    if(msg.toLowerCase().includes("cancel")) text = "Cancelled";
+    else if(msg.includes("pair failed")) text = "Pair failed";
+    else if(!hasBT) text = "No Bluetooth in this browser";
+    setStatus(text, "err");
     btn.hidden = false;
-    btn.textContent = "Reconnect";
+    btn.textContent = hasBT ? "Reconnect" : "Use Chrome on Android";
   }
 }
 
@@ -376,7 +382,14 @@ function init(){
   });
   $("tone").addEventListener("change", e => { toneThrottle.flush(); });
   $("connectBtn").addEventListener("click", connect);
-  connect();
+  const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+  if(isLocal){
+    connect();
+  } else {
+    $("connectBtn").hidden = false;
+    $("connectBtn").textContent = "Connect";
+    setStatus("Tap Connect", "");
+  }
 }
 
 if(typeof window !== "undefined") window.addEventListener("DOMContentLoaded", init);
