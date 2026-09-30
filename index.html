@@ -3,123 +3,148 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0d12">
+<meta name="theme-color" content="#07090d">
 <title>Smartline Bulb</title>
 <style>
   :root{
-    --bg:#0b0d12; --card:#151a24; --card2:#10141d; --line:#242c3b;
-    --tx:#eef2f8; --muted:#8b95a7; --accent:#8ec7ff; --amber:#ffb96b;
-    --ok:#5fe3a6; --warn:#ffc857; --err:#ff7b7b;
+    --bg:#07090d; --glass:rgba(255,255,255,.045); --line:rgba(255,255,255,.09);
+    --tx:#f2f5fa; --muted:#9aa3b5; --ok:#5fe3a6; --warn:#ffc857; --err:#ff7b7b;
+    --glowC:255,170,90; --glowO:.35; --radius:30px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
   body{
     margin:0;min-height:100dvh;color:var(--tx);
-    background:radial-gradient(120% 90% at 50% -20%,#1b2233 0%,#0b0d12 60%);
-    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    display:flex;align-items:center;justify-content:center;padding:24px 18px calc(24px + env(safe-area-inset-bottom));
+    background:
+      radial-gradient(110% 60% at 50% -10%, #141a27 0%, var(--bg) 55%),
+      var(--bg);
+    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    padding:calc(20px + env(safe-area-inset-top)) 18px calc(26px + env(safe-area-inset-bottom));
   }
-  .app{width:100%;max-width:430px}
-  header{display:flex;align-items:center;justify-content:space-between;margin:0 6px 18px}
-  h1{font-size:17px;font-weight:650;letter-spacing:.2px;margin:0}
+  body::before{
+    content:"";position:fixed;inset:-25%;pointer-events:none;z-index:0;
+    background:radial-gradient(55% 38% at 50% 4%, rgba(var(--glowC), var(--glowO)) 0%, transparent 70%);
+    transition:background .5s ease;
+  }
+  .app{width:100%;max-width:430px;position:relative;z-index:1}
+  .top{display:flex;align-items:flex-end;justify-content:space-between;margin:0 8px 18px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:23px;font-weight:750;letter-spacing:-.3px;margin:3px 0 0}
   h1 span{color:var(--muted);font-weight:450}
+  .top-actions{display:flex;gap:8px;align-items:center}
+  .icon-btn{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+    color:var(--muted);font-size:16px;cursor:pointer;display:grid;place-items:center;transition:all .15s}
+  .icon-btn:hover{color:var(--tx);border-color:rgba(255,255,255,.2)}
   .status{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);
-    border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:#0e121a}
+    border:1px solid var(--line);border-radius:999px;padding:7px 12px;background:rgba(0,0,0,.35)}
   .status i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:block}
+  .status.ok{color:var(--tx)}
   .status.ok i{background:var(--ok);box-shadow:0 0 10px var(--ok)}
   .status.warn i{background:var(--warn)}
+  .status.err{color:#ffc4c4}
   .status.err i{background:var(--err)}
-  .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
-    border-radius:26px;padding:26px 22px 24px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
-  .orb-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;margin:6px 0 26px}
-  .orb{width:150px;height:150px;border-radius:50%;cursor:pointer;border:1px solid var(--line);
-    background:radial-gradient(80% 80% at 50% 20%,#1d2433,#12161f);
-    color:var(--muted);display:grid;place-items:center;transition:all .25s ease;outline:none}
-  .orb svg{width:52px;height:52px;transition:all .25s ease}
-  .orb:disabled{opacity:.45;cursor:default}
-  .orb.on{color:#3a2a10;border-color:transparent;
-    background:radial-gradient(80% 80% at 50% 25%,#ffe9c9,var(--amber));
-    box-shadow:0 0 0 10px rgba(255,185,107,.08),0 0 60px rgba(255,185,107,.45)}
-  .orb.on svg{transform:scale(1.05)}
-  .state{font-size:14px;color:var(--muted);letter-spacing:.2px}
-  .row{display:flex;align-items:center;gap:14px;margin-top:18px}
-  .row:first-of-type{margin-top:0}
-  .row label{width:86px;flex:none;font-size:12.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
-  .val{width:46px;flex:none;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;color:var(--tx)}
-  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:36px;background:transparent;margin:0}
-  input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:#252d3d}
-  input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:#252d3d}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;
-    background:#f2f5fa;border:none;margin-top:-9px;box-shadow:0 2px 10px rgba(0,0,0,.55);transition:transform .1s}
-  input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#f2f5fa;border:none;
-    box-shadow:0 2px 10px rgba(0,0,0,.55)}
+  .lamp-card{position:relative;overflow:hidden;border-radius:var(--radius);border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.015));
+    box-shadow:0 30px 80px rgba(0,0,0,.5);padding:30px 22px 24px;text-align:center}
+  .lamp-card::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(70% 55% at 50% 18%, rgba(var(--glowC), calc(var(--glowO) * .55)) 0%, transparent 70%)}
+  .lamp{position:relative;width:172px;height:172px;border-radius:50%;cursor:pointer;border:1px solid rgba(255,255,255,.12);
+    background:radial-gradient(78% 78% at 50% 22%,#232b3d,#11151e);color:#7d8798;
+    display:grid;place-items:center;transition:transform .18s ease, box-shadow .3s ease, background .3s ease;outline:none}
+  .lamp:active{transform:scale(.96)}
+  .lamp .halo{position:absolute;inset:-26px;border-radius:50%;
+    background:radial-gradient(closest-side, rgba(var(--glowC), .5), transparent 72%);opacity:0;transition:opacity .4s}
+  .lamp svg{width:62px;height:62px;position:relative;z-index:1;transition:color .3s, filter .3s}
+  .lamp:disabled{opacity:.5;cursor:default}
+  .lamp.on{color:#4a2f0d;border-color:transparent;background:radial-gradient(78% 78% at 50% 24%,#fff3dd,rgb(var(--glowC)) 78%)}
+  .lamp.on .halo{opacity:1}
+  .lamp.on svg{filter:drop-shadow(0 0 18px rgba(var(--glowC), .9))}
+  .state{margin-top:16px;font-size:14.5px;color:var(--muted);letter-spacing:.2px}
+  .state strong{color:var(--tx);font-weight:650}
+  .panel{margin-top:16px;border-radius:var(--radius);border:1px solid var(--line);
+    background:rgba(255,255,255,.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    padding:22px 20px;box-shadow:0 18px 55px rgba(0,0,0,.4)}
+  .ctl+.ctl{margin-top:20px}
+  .ctl-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .ctl-name{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted)}
+  .chip{min-width:58px;text-align:center;font-size:13.5px;font-variant-numeric:tabular-nums;color:var(--tx);
+    background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0;cursor:pointer;--p:50%}
+  input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:99px;
+    background:linear-gradient(90deg, rgba(var(--glowC),.95) var(--p), rgba(255,255,255,.10) var(--p))}
+  input[type=range]::-moz-range-track{height:10px;border-radius:99px;background:rgba(255,255,255,.10)}
+  input[type=range]::-moz-range-progress{height:10px;border-radius:99px;background:rgba(var(--glowC),.95)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;
+    background:#fff;border:none;margin-top:-10px;box-shadow:0 4px 16px rgba(0,0,0,.6),0 0 0 6px rgba(255,255,255,.05);
+    transition:transform .12s}
+  input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:#fff;border:none;
+    box-shadow:0 4px 16px rgba(0,0,0,.6),0 0 0 6px rgba(255,255,255,.05)}
   input[type=range]:active::-webkit-slider-thumb{transform:scale(1.12)}
-  input[type=range]:disabled{opacity:.4}
-  #brightness::-webkit-slider-thumb{background:#eaf3ff}
-  #tone::-webkit-slider-thumb{background:linear-gradient(135deg,#ffd9a8,#fff6ea,#cfe6ff)}
-  #tone::-moz-range-thumb{background:#ffd9a8}
-  .hint{margin:16px 4px 0;font-size:13px;color:var(--muted);text-align:center;min-height:20px}
-  .btn{margin-top:16px;width:100%;padding:15px;border-radius:16px;border:1px solid var(--line);
-    background:#1a2130;color:var(--tx);font:inherit;font-weight:600;cursor:pointer;transition:border-color .15s}
-  .btn:hover{border-color:var(--accent)}
+  input[type=range]:disabled{opacity:.35;cursor:default}
+  #tone::-webkit-slider-runnable-track{background:linear-gradient(90deg,#ff9d4d,var(--p),#ffe9c9 45%,#cfe6ff)}
+  #tone::-moz-range-track{background:linear-gradient(90deg,#ff9d4d,#ffe9c9 45%,#cfe6ff)}
+  .btn{margin-top:20px;width:100%;padding:16px;border-radius:18px;border:none;cursor:pointer;
+    font:inherit;font-weight:700;font-size:15.5px;color:#231603;
+    background:linear-gradient(135deg,#ffd9a4,rgb(var(--glowC)));box-shadow:0 12px 30px rgba(var(--glowC),.25)}
   .btn[hidden]{display:none}
-  .gear{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#0e121a;
-    color:var(--muted);font-size:15px;cursor:pointer;display:grid;place-items:center}
-  .gear:hover{color:var(--tx);border-color:var(--accent)}
   .bridge-row{display:flex;gap:8px;margin-top:14px}
   .bridge-row[hidden]{display:none}
-  .bridge-row input{flex:1;min-width:0;background:#0e121a;border:1px solid var(--line);color:var(--tx);
-    border-radius:12px;padding:12px;font:inherit;font-size:13px}
-  .bridge-row button{padding:0 16px;border-radius:12px;border:1px solid var(--line);background:#1a2130;
-    color:var(--tx);font:inherit;font-weight:600;font-size:13px;cursor:pointer}
-  .bridge-row button:hover{border-color:var(--accent)}
-  footer{margin:16px 6px 0;font-size:11.5px;color:#5b6678;text-align:center}
+  .bridge-row input{flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid var(--line);color:var(--tx);
+    border-radius:14px;padding:13px;font:inherit;font-size:13px}
+  .bridge-row input.pin{max-width:92px;text-align:center}
+  .bridge-row button{padding:0 18px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.06);
+    color:var(--tx);font:inherit;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+  footer{margin:18px 8px 0;font-size:11.5px;color:#5f6a7e;text-align:center;letter-spacing:.3px}
   @media (max-width:380px){
-    .orb{width:126px;height:126px}
-    .orb svg{width:44px;height:44px}
-    .row label{width:70px}
+    .lamp{width:148px;height:148px}
+    .lamp svg{width:52px;height:52px}
+    h1{font-size:20px}
   }
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <h1>Smartline <span>· bulb</span></h1>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="gear" id="gearBtn" title="Bridge settings">⚙</button>
+  <header class="top">
+    <div>
+      <div class="eyebrow">Smartline Flow</div>
+      <h1>The Mood Changer</h1>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="gearBtn" title="Bridge settings" aria-label="Settings">⚙</button>
       <div class="status" id="status"><i></i><span id="statusText">starting…</span></div>
     </div>
   </header>
 
-  <main class="card">
-    <div class="orb-wrap">
-      <button class="orb" id="power" disabled aria-label="Power">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <path d="M12 3v8"/>
-          <path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/>
-        </svg>
-      </button>
-      <div class="state" id="stateText">—</div>
-    </div>
+  <section class="lamp-card" aria-label="Light control">
+    <button class="lamp" id="power" disabled aria-label="Power">
+      <span class="halo" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.3 2.2h4.6c.2-.9.6-1.6 1.3-2.2A6 6 0 0 0 12 3z"/>
+        <path d="M9.5 18.5h5"/>
+        <path d="M10.5 21h3"/>
+      </svg>
+    </button>
+    <div class="state" id="stateText">—</div>
+  </section>
 
-    <div class="row">
-      <label for="brightness">Brightness</label>
+  <section class="panel" aria-label="Light settings">
+    <div class="ctl">
+      <div class="ctl-head"><span class="ctl-name">Brightness</span><span class="chip" id="brightVal">100%</span></div>
       <input type="range" id="brightness" min="1" max="100" value="100" disabled>
-      <div class="val" id="brightVal">100%</div>
     </div>
-    <div class="row">
-      <label for="tone">Tone</label>
+    <div class="ctl">
+      <div class="ctl-head"><span class="ctl-name">Warmth</span><span class="chip" id="toneVal">50</span></div>
       <input type="range" id="tone" min="0" max="100" value="50" disabled>
-      <div class="val" id="toneVal">50</div>
     </div>
-
     <button class="btn" id="connectBtn" hidden>Connect</button>
     <div class="bridge-row" id="bridgeRow" hidden>
       <input type="text" id="bridgeInput" placeholder="Bridge URL (optional)">
-      <input type="text" id="pinInput" inputmode="numeric" placeholder="PIN" style="max-width:86px">
+      <input type="text" id="pinInput" class="pin" inputmode="numeric" placeholder="PIN">
       <button id="bridgeSave">Save</button>
     </div>
-  </main>
+  </section>
 
   <footer>Local Bluetooth · no cloud</footer>
 </div>
@@ -212,23 +237,35 @@ function setStatus(text, kind){
   $("statusText").textContent = text;
   $("status").className = "status" + (kind ? " " + kind : "");
 }
+function bulbGlow(){
+  const t = clamp(state.tone, 0, 100) / 100;
+  const warm = [255, 158, 76], cool = [188, 216, 255];
+  const c = warm.map((v,i) => Math.round(v + (cool[i] - v) * t));
+  const o = state.on === true ? (0.22 + 0.55 * (state.brightness / 100)) : 0.04;
+  return [c, o];
+}
 function render(){
-  const orb = $("power");
-  orb.classList.toggle("on", state.on === true);
-  orb.disabled = !ready;
-  $("stateText").textContent = ready
-    ? (state.on ? "On · " + state.brightness + "%" : "Off")
+  $("power").classList.toggle("on", state.on === true);
+  $("power").disabled = !ready;
+  const [c, o] = bulbGlow();
+  document.body.style.setProperty("--glowC", c.join(","));
+  document.body.style.setProperty("--glowO", o.toFixed(2));
+  $("stateText").innerHTML = ready
+    ? (state.on ? "<strong>On</strong> · " + state.brightness + "%" : "Off")
     : "Not connected";
-  if(document.activeElement !== $("brightness")){
-    $("brightness").value = state.brightness;
+  const b = $("brightness"), t = $("tone");
+  b.style.setProperty("--p", state.brightness + "%");
+  t.style.setProperty("--p", state.tone + "%");
+  if(document.activeElement !== b){
+    b.value = state.brightness;
     $("brightVal").textContent = state.brightness + "%";
   }
-  if(document.activeElement !== $("tone")){
-    $("tone").value = state.tone;
+  if(document.activeElement !== t){
+    t.value = state.tone;
     $("toneVal").textContent = state.tone;
   }
-  $("brightness").disabled = !ready;
-  $("tone").disabled = !ready;
+  b.disabled = !ready;
+  t.disabled = !ready;
 }
 function savePrefs(){
   try{ localStorage.setItem(PREFS_KEY, JSON.stringify({ brightness: state.brightness, tone: state.tone, on: state.on })); }catch(e){}
@@ -274,6 +311,7 @@ async function sendCmd(opcode, params){
         });
         const j = await r.json();
         if(!j.ok) throw new Error(j.error || "command failed");
+        if(j.state) updateStateFromBridge(j.state);
         if($("statusText").textContent === "Command failed") setStatus("Connected", "ok");
         return;
       }catch(e){
@@ -362,16 +400,11 @@ async function bridgeConnect(base){
       const rr = await fetch(bridgeBase + "/state", { cache:"no-store" });
       const js = await rr.json();
       if(typeof js.on === "boolean" && js.on !== state.on){ state.on = js.on; render(); }
-      if(typeof js.brightness === "number" && js.brightness !== state.brightness && document.activeElement !== $("brightness")){
-        state.brightness = js.brightness; render();
-      }
-      if(typeof js.tone === "number" && js.tone !== state.tone && document.activeElement !== $("tone")){
-        state.tone = js.tone; render();
-      }
+      if(typeof js.brightness === "number" && js.brightness !== state.brightness){ updateStateFromBridge(js); }
+      if(typeof js.tone === "number" && js.tone !== state.tone){ updateStateFromBridge(js); }
     }catch(e){}
   }, 2000);
 }
-
 async function relayConnect(){
   const pin = savedPin();
   const proto = location.protocol === "https:" ? "wss://" : "ws://";

@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-start "Smartline bridge" /min cmd /k python bulb-bridge.py
-start "Smartline web" /min cmd /k python -m http.server 8137
+start "" /b pythonw bulb-bridge.py > bridge.log 2>&1
+start "" /b pythonw -m http.server 8137 > web.log 2>&1
