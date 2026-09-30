@@ -115,7 +115,8 @@
 
     <button class="btn" id="connectBtn" hidden>Connect</button>
     <div class="bridge-row" id="bridgeRow" hidden>
-      <input type="url" id="bridgeInput" placeholder="Bridge URL, e.g. https://xxxx.trycloudflare.com">
+      <input type="text" id="bridgeInput" placeholder="Bridge URL (optional)">
+      <input type="text" id="pinInput" inputmode="numeric" placeholder="PIN" style="max-width:86px">
       <button id="bridgeSave">Save</button>
     </div>
   </main>
@@ -142,6 +143,7 @@ const VENDOR = [0x11, 0x02];
 const DEST = 0x00B2;
 const PREFS_KEY = "smartline-prefs";
 const BRIDGE_KEY = "smartline-bridge-url";
+const PIN_KEY = "smartline-pin";
 
 let mode = null;
 let ready = false;
@@ -153,6 +155,9 @@ let seq = 0;
 let state = { on:false, brightness:100, tone:50 };
 let bridgeTimer = null;
 let bridgeBase = null;
+let relayWs = null;
+let relaySeq = 0;
+const pendingRelay = {};
 
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -239,6 +244,25 @@ function loadPrefs(){
 
 async function sendCmd(opcode, params){
   if(!ready) throw new Error("not connected");
+  if(mode === "relay"){
+    const id = ++relaySeq;
+    const res = await new Promise((resolve, reject) => {
+      pendingRelay[id] = { resolve, reject };
+      try{
+        relayWs.send(JSON.stringify({ type: "command", id, opcode, params: Array.from(params), dest: DEST }));
+      }catch(e){
+        delete pendingRelay[id];
+        reject(e);
+        return;
+      }
+      setTimeout(() => {
+        if(pendingRelay[id]){ delete pendingRelay[id]; reject(new Error("timeout")); }
+      }, 8000);
+    });
+    if(res.state) updateStateFromBridge(res.state);
+    if($("statusText").textContent === "Command failed") setStatus("Connected", "ok");
+    return;
+  }
   if(mode === "bridge"){
     let lastErr = null;
     for(let attempt = 0; attempt < 2; attempt++){
@@ -304,6 +328,16 @@ async function togglePower(){
 function savedBridge(){
   try{ return localStorage.getItem(BRIDGE_KEY) || ""; }catch(e){ return ""; }
 }
+function savedPin(){
+  try{ return localStorage.getItem(PIN_KEY) || ""; }catch(e){ return ""; }
+}
+function updateStateFromBridge(js){
+  if(!js) return;
+  if(typeof js.on === "boolean") state.on = js.on;
+  if(typeof js.brightness === "number" && document.activeElement !== $("brightness")) state.brightness = js.brightness;
+  if(typeof js.tone === "number" && document.activeElement !== $("tone")) state.tone = js.tone;
+  render();
+}
 async function detectBridge(base){
   try{
     const ctrl = new AbortController();
@@ -336,6 +370,50 @@ async function bridgeConnect(base){
       }
     }catch(e){}
   }, 2000);
+}
+
+async function relayConnect(){
+  const pin = savedPin();
+  const proto = location.protocol === "https:" ? "wss://" : "ws://";
+  const url = proto + location.host + "/client?pin=" + encodeURIComponent(pin);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let ws;
+    try{ ws = new WebSocket(url); }catch(e){ reject(e); return; }
+    const timer = setTimeout(() => {
+      if(!settled){ settled = true; try{ ws.close(); }catch(e){} reject(new Error("relay timeout")); }
+    }, 6000);
+    ws.onmessage = ev => {
+      let d;
+      try{ d = JSON.parse(ev.data); }catch(e){ return; }
+      if(d.type === "status"){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if(d.agent){
+          relayWs = ws;
+          mode = "relay";
+          ready = true;
+          render();
+          resolve(true);
+        } else {
+          try{ ws.close(); }catch(e){}
+          reject(new Error("pc offline"));
+        }
+      } else if(d.type === "error"){
+        if(!settled){ settled = true; clearTimeout(timer); reject(new Error(d.error || "relay error")); }
+        try{ ws.close(); }catch(e){}
+      } else if(d.type === "result"){
+        const p = pendingRelay[d.id];
+        if(p){ delete pendingRelay[d.id]; d.ok ? p.resolve(d) : p.reject(new Error(d.error || "command failed")); }
+      }
+    };
+    ws.onclose = () => {
+      if(!settled){ settled = true; clearTimeout(timer); reject(new Error("relay closed")); return; }
+      if(mode === "relay" && ready){ ready = false; relayWs = null; render(); setStatus("PC offline", "err"); }
+    };
+    ws.onerror = () => {};
+  });
 }
 
 async function connectBT(){
@@ -383,11 +461,19 @@ async function connect(){
         break;
       }
     }
+    if(!connected && !isLocal && savedPin()){
+      try{
+        await relayConnect();
+        connected = true;
+      }catch(e){
+        if((e.message || "").includes("pin")) throw e;
+      }
+    }
     if(!connected){
       if("bluetooth" in navigator){
         await connectBT();
       } else {
-        throw new Error(saved ? "bridge not reachable" : "no bridge configured");
+        throw new Error(savedPin() ? "pc offline" : "no bridge configured");
       }
     }
     setStatus("Connected", "ok");
@@ -404,7 +490,9 @@ async function connect(){
     let text = "Not reachable";
     if(msg.toLowerCase().includes("cancel")) text = "Cancelled";
     else if(msg.includes("pair failed")) text = "Pair failed";
-    else if(msg.includes("no bridge")) text = "Set bridge URL in ⚙";
+    else if(msg.includes("pc offline")) text = "PC offline";
+    else if(msg.toLowerCase().includes("pin")) text = "Wrong PIN";
+    else if(msg.includes("no bridge")) text = "Set PIN in ⚙";
     else if(!hasBT) text = "No Bluetooth in this browser";
     setStatus(text, "err");
     btn.hidden = false;
@@ -430,16 +518,20 @@ function init(){
   $("gearBtn").addEventListener("click", () => {
     const row = $("bridgeRow");
     row.hidden = !row.hidden;
-    if(!row.hidden) $("bridgeInput").value = savedBridge();
+    if(!row.hidden){ $("bridgeInput").value = savedBridge(); $("pinInput").value = savedPin(); }
   });
   $("bridgeSave").addEventListener("click", () => {
     const v = $("bridgeInput").value.trim().replace(/\/+$/, "");
-    try{ v ? localStorage.setItem(BRIDGE_KEY, v) : localStorage.removeItem(BRIDGE_KEY); }catch(e){}
+    const p = $("pinInput").value.trim();
+    try{
+      v ? localStorage.setItem(BRIDGE_KEY, v) : localStorage.removeItem(BRIDGE_KEY);
+      p ? localStorage.setItem(PIN_KEY, p) : localStorage.removeItem(PIN_KEY);
+    }catch(e){}
     $("bridgeRow").hidden = true;
-    setStatus(v ? "Bridge saved" : "Bridge cleared", "ok");
+    setStatus(v || p ? "Saved" : "Cleared", "ok");
   });
   const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
-  if(isLocal || savedBridge()){
+  if(isLocal || savedBridge() || savedPin()){
     connect();
   } else {
     $("connectBtn").hidden = false;

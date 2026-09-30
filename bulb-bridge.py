@@ -8,6 +8,7 @@ Run with:  python bulb-bridge.py
 import asyncio
 import json
 import os
+import random
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +26,40 @@ PASSWORD = b"123"
 VENDOR = b"\x11\x02"
 DEFAULT_DEST = 0x00B2
 PORT = 8138
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PIN_FILE = os.path.join(BASE_DIR, "pin.txt")
+RELAY_FILE = os.path.join(BASE_DIR, "relay.txt")
+
+
+def get_pin():
+    try:
+        if os.path.exists(PIN_FILE):
+            p = open(PIN_FILE, encoding="utf-8").read().strip()
+            if p:
+                return p
+        p = str(random.randint(1000, 9999))
+        with open(PIN_FILE, "w", encoding="utf-8") as f:
+            f.write(p)
+        return p
+    except Exception:
+        return "1234"
+
+
+def get_relay():
+    try:
+        if os.path.exists(RELAY_FILE):
+            for line in open(RELAY_FILE, encoding="utf-8"):
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line
+    except Exception:
+        pass
+    return ""
+
+
+PIN = get_pin()
+RELAY_URL = get_relay()
 
 
 def pad16(b):
@@ -225,17 +260,54 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+async def relay_loop():
+    if not RELAY_URL:
+        return
+    import aiohttp
+
+    url = RELAY_URL.rstrip("/") + "/agent?pin=" + PIN
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(url, heartbeat=30) as ws:
+                    print("Relay connected:", RELAY_URL)
+                    async for msg in ws:
+                        if msg.type != aiohttp.WSMsgType.TEXT:
+                            continue
+                        try:
+                            data = json.loads(msg.data)
+                        except Exception:
+                            continue
+                        if data.get("type") == "command":
+                            cid = data.get("id")
+                            try:
+                                opcode = int(data.get("opcode"))
+                                params = bytes(data.get("params", []))
+                                dest = int(data.get("dest", DEFAULT_DEST))
+                                await bulb.command(opcode, params, dest)
+                                await ws.send_json({"type": "result", "id": cid, "ok": True, "state": bulb.state})
+                            except Exception as e:
+                                await ws.send_json({"type": "result", "id": cid, "ok": False, "error": str(e), "state": bulb.state})
+        except Exception as e:
+            print("Relay error:", e)
+        await asyncio.sleep(5)
+
+
 async def amain():
     global loop
     loop = asyncio.get_running_loop()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print("=" * 56)
+    print("=" * 60)
     print(" Smartline bulb bridge is running")
-    print(f" http://127.0.0.1:{PORT}")
-    print(" Keep this window open. Now use the web app:")
-    print(" http://localhost:8137/")
-    print("=" * 56)
+    print(f" Local:  http://127.0.0.1:{PORT}")
+    print(f" PIN:    {PIN}")
+    if RELAY_URL:
+        print(f" Relay:  {RELAY_URL}  (phone/domain access)")
+        asyncio.create_task(relay_loop())
+    else:
+        print(" Relay:  not configured (put your Railway URL in relay.txt)")
+    print("=" * 60)
     while True:
         await asyncio.sleep(3600)
 
