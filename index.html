@@ -63,6 +63,16 @@
     background:#1a2130;color:var(--tx);font:inherit;font-weight:600;cursor:pointer;transition:border-color .15s}
   .btn:hover{border-color:var(--accent)}
   .btn[hidden]{display:none}
+  .gear{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#0e121a;
+    color:var(--muted);font-size:15px;cursor:pointer;display:grid;place-items:center}
+  .gear:hover{color:var(--tx);border-color:var(--accent)}
+  .bridge-row{display:flex;gap:8px;margin-top:14px}
+  .bridge-row[hidden]{display:none}
+  .bridge-row input{flex:1;min-width:0;background:#0e121a;border:1px solid var(--line);color:var(--tx);
+    border-radius:12px;padding:12px;font:inherit;font-size:13px}
+  .bridge-row button{padding:0 16px;border-radius:12px;border:1px solid var(--line);background:#1a2130;
+    color:var(--tx);font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+  .bridge-row button:hover{border-color:var(--accent)}
   footer{margin:16px 6px 0;font-size:11.5px;color:#5b6678;text-align:center}
   @media (max-width:380px){
     .orb{width:126px;height:126px}
@@ -75,7 +85,10 @@
 <div class="app">
   <header>
     <h1>Smartline <span>· bulb</span></h1>
-    <div class="status" id="status"><i></i><span id="statusText">starting…</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="gear" id="gearBtn" title="Bridge settings">⚙</button>
+      <div class="status" id="status"><i></i><span id="statusText">starting…</span></div>
+    </div>
   </header>
 
   <main class="card">
@@ -101,6 +114,10 @@
     </div>
 
     <button class="btn" id="connectBtn" hidden>Connect</button>
+    <div class="bridge-row" id="bridgeRow" hidden>
+      <input type="url" id="bridgeInput" placeholder="Bridge URL, e.g. https://xxxx.trycloudflare.com">
+      <button id="bridgeSave">Save</button>
+    </div>
   </main>
 
   <footer>Local Bluetooth · no cloud</footer>
@@ -124,6 +141,7 @@ const PASS = "123";
 const VENDOR = [0x11, 0x02];
 const DEST = 0x00B2;
 const PREFS_KEY = "smartline-prefs";
+const BRIDGE_KEY = "smartline-bridge-url";
 
 let mode = null;
 let ready = false;
@@ -134,6 +152,7 @@ let macBytes = null;
 let seq = 0;
 let state = { on:false, brightness:100, tone:50 };
 let bridgeTimer = null;
+let bridgeBase = null;
 
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -272,27 +291,31 @@ async function togglePower(){
   catch(e){ state.on = !on; render(); setStatus("Command failed", "err"); }
 }
 
-async function detectBridge(){
+function savedBridge(){
+  try{ return localStorage.getItem(BRIDGE_KEY) || ""; }catch(e){ return ""; }
+}
+async function detectBridge(base){
   try{
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 1500);
-    const r = await fetch(BRIDGE_URL + "/ping", { cache:"no-store", signal: ctrl.signal });
+    const t = setTimeout(() => ctrl.abort(), 2000);
+    const r = await fetch(base + "/ping", { cache:"no-store", signal: ctrl.signal });
     clearTimeout(t);
     const j = await r.json();
     return j && j.ok ? j : null;
   }catch(e){ return null; }
 }
-async function bridgeConnect(){
-  const r = await fetch(BRIDGE_URL + "/connect", { method:"POST", headers:{ "Content-Type":"application/json" }, body:"{}" });
+async function bridgeConnect(base){
+  const r = await fetch(base + "/connect", { method:"POST", headers:{ "Content-Type":"application/json" }, body:"{}" });
   const j = await r.json();
   if(!j.ok) throw new Error(j.error || "connect failed");
+  bridgeBase = base;
   mode = "bridge";
   ready = true;
   render();
   clearInterval(bridgeTimer);
   bridgeTimer = setInterval(async () => {
     try{
-      const rr = await fetch(BRIDGE_URL + "/state", { cache:"no-store" });
+      const rr = await fetch(bridgeBase + "/state", { cache:"no-store" });
       const js = await rr.json();
       if(typeof js.on === "boolean" && js.on !== state.on){ state.on = js.on; render(); }
       if(typeof js.brightness === "number" && js.brightness !== state.brightness && document.activeElement !== $("brightness")){
@@ -338,13 +361,24 @@ async function connect(){
   setStatus("Connecting…", "warn");
   try{
     const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
-    const b = isLocal ? await detectBridge() : null;
-    if(b){
-      await bridgeConnect();
-    } else if("bluetooth" in navigator){
-      await connectBT();
-    } else {
-      throw new Error("start start-bridge.bat first");
+    const bases = [];
+    if(isLocal) bases.push(BRIDGE_URL);
+    const saved = savedBridge();
+    if(saved && !bases.includes(saved)) bases.push(saved);
+    let connected = false;
+    for(const base of bases){
+      if(await detectBridge(base)){
+        await bridgeConnect(base);
+        connected = true;
+        break;
+      }
+    }
+    if(!connected){
+      if("bluetooth" in navigator){
+        await connectBT();
+      } else {
+        throw new Error(saved ? "bridge not reachable" : "no bridge configured");
+      }
     }
     setStatus("Connected", "ok");
     render();
@@ -360,10 +394,11 @@ async function connect(){
     let text = "Not reachable";
     if(msg.toLowerCase().includes("cancel")) text = "Cancelled";
     else if(msg.includes("pair failed")) text = "Pair failed";
+    else if(msg.includes("no bridge")) text = "Set bridge URL in ⚙";
     else if(!hasBT) text = "No Bluetooth in this browser";
     setStatus(text, "err");
     btn.hidden = false;
-    btn.textContent = hasBT ? "Reconnect" : "Use Chrome on Android";
+    btn.textContent = hasBT ? "Reconnect" : "Reconnect (set ⚙)";
   }
 }
 
@@ -382,8 +417,19 @@ function init(){
   });
   $("tone").addEventListener("change", e => { toneThrottle.flush(); });
   $("connectBtn").addEventListener("click", connect);
+  $("gearBtn").addEventListener("click", () => {
+    const row = $("bridgeRow");
+    row.hidden = !row.hidden;
+    if(!row.hidden) $("bridgeInput").value = savedBridge();
+  });
+  $("bridgeSave").addEventListener("click", () => {
+    const v = $("bridgeInput").value.trim().replace(/\/+$/, "");
+    try{ v ? localStorage.setItem(BRIDGE_KEY, v) : localStorage.removeItem(BRIDGE_KEY); }catch(e){}
+    $("bridgeRow").hidden = true;
+    setStatus(v ? "Bridge saved" : "Bridge cleared", "ok");
+  });
   const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
-  if(isLocal){
+  if(isLocal || savedBridge()){
     connect();
   } else {
     $("connectBtn").hidden = false;
